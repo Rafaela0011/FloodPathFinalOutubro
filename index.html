@@ -1,0 +1,501 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FloodPath - Monitoramento de Enchentes</title>
+    <!-- CSS da Aplicação -->
+    <link rel="stylesheet" href="style.css">
+    <!-- FontAwesome Ícones -->
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <!-- Bibliotecas Externas -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ol@v10.3.1/ol.css">
+    <script src="https://cdn.jsdelivr.net/npm/ol@v10.3.1/dist/ol.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <!-- Scripts do Projeto na Ordem Correta -->
+    <script src="config.js" defer></script>
+    <script src="notificacoes.js" defer></script>
+    <script src="voz.js" defer></script>
+    <script src="mapa.js" defer></script>
+    <script src="main.js" defer></script>
+    <script src="relatorio.js" defer></script>
+    <script src="pesquisa.js" defer></script>
+    <script src="historico.js" defer></script>
+    <script src="telefone.js" defer></script>
+    <script src="compartilhamento.js" defer></script>
+    <script src="fotos.js" defer></script>
+    <script src="acessibilidade.js" defer></script>
+</head>
+<body>
+   <!-- CONTAINER PARA POP-UPS E ALERTAS DE BLOQUEIO DA ROTA (ANÚNCIO PARA LEITORES DE TELA) -->
+    <div id="mensagem-sistema" aria-live="assertive" role="alert"></div>
+
+    <header class="main-header" role="banner">
+        <div class="logo">FLOOD<span>PATH</span></div>
+        
+        <nav class="nav-links" aria-label="Navegação principal">
+            <a href="#" id="link-mapa" onclick="event.preventDefault(); toggleFullscreen();">Mapa</a>
+            <button class="btn-support" onclick="abrirModalSuporte()" aria-label="Abrir central de suporte">
+                <i class="fas fa-headset" aria-hidden="true"></i> Suporte
+            </button>
+
+            <!-- BARRA DE FERRAMENTAS DE ACESSIBILIDADE -->
+            <div class="a11y-controls" role="group" aria-label="Controles de acessibilidade">
+                <button type="button" onclick="alterarTamanhoFonte(1)" title="Aumentar Fonte" aria-label="Aumentar tamanho da fonte">A+</button>
+                <button type="button" onclick="alterarTamanhoFonte(-1)" title="Diminuir Fonte" aria-label="Diminuir tamanho da fonte">A-</button>
+                <button type="button" onclick="alternarAltoContraste()" title="Alto Contraste" aria-label="Alternar modo de alto contraste">
+                    <i class="fas fa-adjust" aria-hidden="true"></i>
+                </button>
+            </div>
+        </nav>
+
+        <!-- Agrupamento dos botões à direita -->
+        <div class="header-actions">
+            <!-- BOTÃO DO RELATÓRIO DE ALAGAMENTOS -->
+            <button class="btn-relatorio" onclick="abrirRelatorioPronto()" aria-label="Visualizar e baixar relatório de alagamentos">
+                <i class="fas fa-file-alt" aria-hidden="true"></i> Relatório de Alagamentos
+            </button>
+
+            <div class="sos-dropdown-wrapper" style="position: relative;">
+                <button class="btn-sos" onclick="toggleMenuSOS(event)" aria-expanded="false" aria-haspopup="true" aria-label="Abrir menu de emergência SOS">
+                    <i class="fas fa-phone-alt" aria-hidden="true"></i> SOS EMERGÊNCIA
+                </button>
+                
+                <!-- Menu de escolha com os dois números -->
+                <div id="menu-sos" class="sos-menu-popover" style="display: none;" role="menu">
+                    <button class="sos-option-btn" onclick="iniciarChamadaSOS('Bombeiros', '193')" role="menuitem" aria-label="Simular chamada para Bombeiros 193">
+                        <i class="fas fa-fire-extinguisher" aria-hidden="true"></i>
+                        <div>
+                            <strong>Bombeiros</strong>
+                            <span>Ligar para 193</span>
+                        </div>
+                    </button>
+                    <button class="sos-option-btn" onclick="iniciarChamadaSOS('Defesa Civil', '199')" role="menuitem" aria-label="Simular chamada para Defesa Civil 199">
+                        <i class="fas fa-shield-alt" aria-hidden="true"></i>
+                        <div>
+                            <strong>Defesa Civil</strong>
+                            <span>Ligar para 199</span>
+                        </div>
+                    </button>
+                </div>
+            </div>
+
+            <button class="btn-reportar-foto" onclick="abrirModalReportarFoto()" aria-label="Reportar foto de inundação">
+                <i class="fas fa-camera" aria-hidden="true"></i> Reportar Foto Inundação
+            </button>
+        </div>
+    </header>
+
+    <!-- BARRA DE PESQUISA COM SUGESTÕES ESTILO WAZE -->
+    <div class="search-area" role="search">
+        <div class="search-input-wrap">
+            <i class="fas fa-map-marker-alt" style="margin-right: 10px; color: #3b82f6;" aria-hidden="true"></i>
+            <input type="text" id="destination" placeholder="Digite um destino (ex: Senai, Shopping)..." autocomplete="off" oninput="buscarSugestoes(this.value)" aria-label="Digite um destino para traçar rota seca" role="searchbox">
+        </div>
+        <button class="btn-route" onclick="tracarR()" aria-label="Traçar rota seca até o destino">
+            <i class="fas fa-route" aria-hidden="true"></i> Traçar Rota Seca
+        </button>
+       
+        <!-- DROP-DOWN DE SUGESTÕES DA PESQUISA -->
+        <div id="suggestions-box" class="suggestions-dropdown" role="listbox" aria-label="Sugestões de endereços"></div>
+    </div>
+
+    <main class="main-grid" role="main">
+        <aside class="sidebar" aria-label="Painel de controle e histórico">
+            <!-- CARD DINÂMICO COM ABAS DE NAVEGAÇÃO (GERAL / CRISTO / SESC) -->
+            <section class="card" aria-labelledby="titulo-card-sensor">
+                <div class="sensor-tabs" style="display: flex; gap: 6px; margin-bottom: 12px;" role="tablist" aria-label="Seleção de ponto monitorado">
+                    <button type="button" class="tab-btn active" onclick="alternarAbaSensor('geral', this)" role="tab" aria-selected="true" style="flex: 1; padding: 6px; border: none; border-radius: 6px; font-size: 0.75rem; font-weight: bold; cursor: pointer; background: #3b82f6; color: white;">Geral</button>
+                    <button type="button" class="tab-btn" onclick="alternarAbaSensor('1', this)" role="tab" aria-selected="false" style="flex: 1; padding: 6px; border: none; border-radius: 6px; font-size: 0.75rem; font-weight: bold; cursor: pointer; background: #e2e8f0; color: #475569;">Cristo</button>
+                    <button type="button" class="tab-btn" onclick="alternarAbaSensor('2', this)" role="tab" aria-selected="false" style="flex: 1; padding: 6px; border: none; border-radius: 6px; font-size: 0.75rem; font-weight: bold; cursor: pointer; background: #e2e8f0; color: #475569;">SESC</button>
+                </div>
+
+                <div class="card-header">
+                    <div class="icon-box-blue"><i class="fas fa-city" id="icone-card-sensor" aria-hidden="true"></i></div>
+                    <h2 id="titulo-card-sensor" style="font-size: 1rem; font-weight: 800;">Situação da Cidade</h2>
+                </div>
+
+                <div class="status-box" aria-live="polite">
+                    <span class="status-tag" id="tag-sensor">STATUS GERAL</span>
+                    <h3 id="status-cidade-titulo">Estado Normal</h3>
+                    <p id="status-cidade-descricao">Carregando dados dos sensores...</p>
+                </div>
+               
+                <div class="stat-row">
+                    <span>Vias Interrompidas</span>
+                    <span class="val-red" id="vias-count">00</span>
+                </div>
+                <div class="stat-row">
+                    <span>Pontos de Alagamento</span>
+                    <span class="val-orange" id="alagamentos-count">00</span>
+                </div>
+            </section>
+
+            <!-- CARD: HISTÓRICO DE LEITURAS -->
+            <section class="card" aria-labelledby="titulo-historico">
+                <div class="historico-tabs" style="display: flex; gap: 6px; margin-bottom: 12px;" role="tablist" aria-label="Seleção de histórico">
+                    <button type="button" class="tab-btn-hist active" onclick="alternarAbaHistorico('geral', this)" role="tab" aria-selected="true" style="flex: 1; padding: 6px; border: none; border-radius: 6px; font-size: 0.75rem; font-weight: bold; cursor: pointer; background: #3b82f6; color: white;">Geral</button>
+                    <button type="button" class="tab-btn-hist" onclick="alternarAbaHistorico('SENSOR_01', this)" role="tab" aria-selected="false" style="flex: 1; padding: 6px; border: none; border-radius: 6px; font-size: 0.75rem; font-weight: bold; cursor: pointer; background: #e2e8f0; color: #475569;">Cristo</button>
+                    <button type="button" class="tab-btn-hist" onclick="alternarAbaHistorico('SENSOR_02', this)" role="tab" aria-selected="false" style="flex: 1; padding: 6px; border: none; border-radius: 6px; font-size: 0.75rem; font-weight: bold; cursor: pointer; background: #e2e8f0; color: #475569;">SESC</button>
+                </div>
+
+                <div class="card-header">
+                    <div class="icon-box-blue"><i class="fas fa-chart-line" aria-hidden="true"></i></div>
+                    <h2 style="font-size: 1rem; font-weight: 800;" id="titulo-historico">Histórico de Leituras</h2>
+                </div>
+
+                <div style="position: relative; height: 180px; width: 100%; margin-bottom: 15px;">
+                    <canvas id="graficoHistorico" aria-label="Gráfico comparativo de nível dos rios" role="img"></canvas>
+                </div>
+
+                <div style="max-height: 150px; overflow-y: auto; font-size: 0.75rem;">
+                    <table style="width: 100%; text-align: left; border-collapse: collapse;">
+                        <thead>
+                            <tr style="border-bottom: 1px solid #e2e8f0; color: #64748b;">
+                                <th scope="col" style="padding: 4px;">Sensor</th>
+                                <th scope="col" style="padding: 4px;">Nível</th>
+                                <th scope="col" style="padding: 4px;">Status</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tabela-historico-body">
+                            <tr>
+                                <td colspan="3" style="text-align: center; padding: 10px; color: #94a3b8;">Carregando dados...</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+
+            <!-- CARD: CONFIGURAÇÃO DE NOTIFICAÇÕES (ALERTAS DE EMERGÊNCIA - 100% TOGGLE SWITCHES) -->
+            <section class="card" aria-labelledby="titulo-notificacoes">
+                <div class="card-header">
+                    <div class="icon-box-blue"><i class="fas fa-bell" aria-hidden="true"></i></div>
+                    <h2 id="titulo-notificacoes" style="font-size: 1rem; font-weight: 800;">Alertas de Emergência</h2>
+                </div>
+
+                <!-- 1. TOGGLE MESTRE: Ligar / Desligar Notificações -->
+                <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; padding-bottom: 12px; border-bottom: 1px solid #f1f5f9;">
+                    <div>
+                        <strong style="font-size: 0.85rem; color: #1e293b; display: block;">Receber Notificações</strong>
+                        <span style="font-size: 0.72rem; color: #64748b;">Alertas no navegador/celular</span>
+                    </div>
+                    <label class="switch">
+                        <input type="checkbox" id="chk-ativar-notif" onchange="salvarPreferenciasNotificacao()">
+                        <span class="slider"></span>
+                    </label>
+                </div>
+
+                <!-- 2. PAINEL DE PONTOS MONITORADOS (EXPANDE AO ATIVAR O TOGGLE MESTRE) -->
+                <div id="painel-regioes-notif" class="painel-regioes-box" style="display: none; flex-direction: column; gap: 8px; margin-top: 10px; padding-top: 10px; border-top: 1px dashed #e2e8f0;">
+                    <span style="font-size: 0.72rem; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: 0.5px;">
+                        Regiões Monitoradas
+                    </span>
+
+                    <!-- TOGGLE REGIONAL 1: Rotatória do Cristo -->
+                    <div class="item-regiao-toggle" style="display: flex; align-items: center; justify-content: space-between; background: #f8fafc; padding: 8px 12px; border-radius: 8px; border: 1px solid #e2e8f0;">
+                        <span style="font-size: 0.82rem; font-weight: 600; color: #334155;">Rotatória do Cristo</span>
+                        <label class="switch">
+                            <input type="checkbox" id="chk-notif-cristo" onchange="salvarPreferenciasNotificacao()">
+                            <span class="slider"></span>
+                        </label>
+                    </div>
+
+                    <!-- TOGGLE REGIONAL 2: SESC São Carlos -->
+                    <div class="item-regiao-toggle" style="display: flex; align-items: center; justify-content: space-between; background: #f8fafc; padding: 8px 12px; border-radius: 8px; border: 1px solid #e2e8f0;">
+                        <span style="font-size: 0.82rem; font-weight: 600; color: #334155;">SESC São Carlos</span>
+                        <label class="switch">
+                            <input type="checkbox" id="chk-notif-sesc" onchange="salvarPreferenciasNotificacao()">
+                            <span class="slider"></span>
+                        </label>
+                    </div>
+                </div>
+            </section>
+        </aside>
+
+        <div class="main-content">
+            <section class="map-wrapper" aria-label="Mapa interativo de monitoramento">
+                <div id="map-container">
+                    <button id="btn-fullscreen" onclick="toggleFullscreen()" title="Expandir Mapa" aria-label="Alternar tela cheia no mapa">
+                        <i class="fas fa-expand" aria-hidden="true"></i>
+                    </button>
+                </div>
+
+                <div id="overlay-bloqueio" class="status-critico">
+                    <div class="marker-bubble">
+                        <div class="icon-circle"><i class="fas fa-water" aria-hidden="true"></i></div>
+                        <span id="label-bloqueio">ÁREA INUNDADA</span>
+                    </div>
+                </div>
+
+                <div id="overlay-subindo" class="status-critico">
+                    <div class="marker-bubble">
+                        <div class="icon-circle"><i class="fas fa-exclamation-triangle" aria-hidden="true"></i></div>
+                        <span id="label-subindo">ÁREA INUNDADA</span>
+                    </div>
+                </div>
+
+                <div id="overlay-user" class="api-marker">
+                    <div class="marker-bubble">
+                        VOCÊ ESTÁ AQUI
+                    </div>
+                </div>
+
+                <div id="overlay-destino">
+                    <div class="destino-icon"><i class="fas fa-flag-checkered" aria-hidden="true"></i></div>
+                    <span id="label-destino" class="destino-label">DESTINO</span>
+                </div>
+
+                <div class="map-legend" aria-label="Legenda do mapa">
+                    <div class="legend-item"><span class="dot red"></span> Risco Crítico</div>
+                    <div class="legend-item"><span class="dot blue"></span> Sua Posição</div>
+                    <div class="legend-item"><span class="dot vias"></span> Vias Urbanas</div>
+                </div>
+            </section>
+
+            <section class="protocol-section" aria-labelledby="titulo-protocolos">
+                <div class="protocol-header">
+                    <div class="icon-box-blue"><i class="fas fa-shield-alt" aria-hidden="true"></i></div>
+                    <h2 id="titulo-protocolos">Em Caso De Inundação Siga Os Protocolos de Emergência</h2>
+                </div>
+                <div class="protocol-grid">
+                    <div class="protocol-item">
+                        <i class="fas fa-bolt" style="color: #f59e0b;" aria-hidden="true"></i>
+                        <h4>Rede Elétrica</h4>
+                        <p>Desligue a chave geral se a água entrar em casa.</p>
+                    </div>
+                    <div class="protocol-item">
+                        <i class="fas fa-car" style="color: var(--emergency-red);" aria-hidden="true"></i>
+                        <h4>Veículos</h4>
+                        <p>Abandone o veículo se o nível subir rapidamente.</p>
+                    </div>
+                    <div class="protocol-item">
+                        <i class="fas fa-virus" style="color: var(--action-blue);" aria-hidden="true"></i>
+                        <h4>Saúde</h4>
+                        <p>Evite contato direto com a água da enchente.</p>
+                    </div>
+                    <div class="protocol-item">
+                        <i class="fas fa-house-damage" style="color: var(--success-green);" aria-hidden="true"></i>
+                        <h4>Encostas</h4>
+                        <p>Fique alerta a estalos ou rachaduras no solo.</p>
+                    </div>
+                </div>
+            </section>
+        </div>
+    </main>
+
+    <footer role="contentinfo">
+        <div style="display: flex; align-items: center;">
+            <div class="footer-logo-square"></div>
+            <div>
+                <h4 style="font-weight: 900;">FLOODPATH &copy; 2026</h4>
+                <p style="font-size: 0.75rem; color: #94a3b8;">Tecnologia preventiva.</p>
+            </div>
+        </div>
+        <div style="text-align: right;">
+            <div class="team-names">NATHAN · RAFAELA · RYAN · STELLA</div>
+            <div class="contingency-bar">Suporte Técnico: suporte@floodpath.com</div>
+        </div>
+    </footer>
+
+    <!-- MODAL SOS ESTILO IOS -->
+    <div id="sos-modal" class="ios-incoming-call" role="dialog" aria-labelledby="sos-caller-name" aria-modal="true">
+        <div class="ios-blur-bg"></div>
+        <div class="ios-call-container">
+            <div class="ios-contact-info">
+                <h1 id="sos-caller-name" class="ios-caller-name">Bombeiros (193)</h1>
+                <p id="sos-status" class="ios-call-status">ligando...</p>
+                <div id="sos-timer" class="ios-ios-timer">00:00</div>
+            </div>
+
+            <div class="ios-actions-grid">
+                <div class="ios-grid-item">
+                    <button class="ios-round-btn" aria-label="Mudo"><i class="fas fa-microphone-slash" aria-hidden="true"></i></button>
+                    <span>mudo</span>
+                </div>
+                <div class="ios-grid-item">
+                    <button class="ios-round-btn" aria-label="Teclado"><i class="fas fa-th" aria-hidden="true"></i></button>
+                    <span>teclado</span>
+                </div>
+                <div class="ios-grid-item">
+                    <button class="ios-round-btn" aria-label="Alto-falante"><i class="fas fa-volume-up" aria-hidden="true"></i></button>
+                    <span>alto-falante</span>
+                </div>
+                <div class="ios-grid-item">
+                    <button class="ios-round-btn" aria-label="Adicionar chamada"><i class="fas fa-plus" aria-hidden="true"></i></button>
+                    <span>add. chamada</span>
+                </div>
+                <div class="ios-grid-item">
+                    <button class="ios-round-btn" aria-label="FaceTime"><i class="fas fa-video" aria-hidden="true"></i></button>
+                    <span>FaceTime</span>
+                </div>
+                <div class="ios-grid-item">
+                    <button class="ios-round-btn" aria-label="Contatos"><i class="fas fa-user-circle" aria-hidden="true"></i></button>
+                    <span>contatos</span>
+                </div>
+            </div>
+
+            <div class="ios-end-call-container">
+                <button id="btn-cancel-sos" class="ios-end-call-btn" aria-label="Desligar chamada de emergência">
+                    <i class="fas fa-phone-alt" aria-hidden="true"></i>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- BOTÃO FLUTUANTE DE COMPARTILHAMENTO WHATSAPP -->
+    <button class="whatsapp-sticky-tab" onclick="compartilharAlertaWhatsApp()" title="Compartilhar Alerta no WhatsApp" aria-label="Compartilhar alerta de inundação no WhatsApp">
+        <i class="fab fa-whatsapp" aria-hidden="true"></i>
+        <span>WhatsApp</span>
+    </button>
+
+    <!-- MODAL COM SELEÇÃO DE LOCAL PARA REPORTAR FOTO -->
+    <div id="modal-reportar-foto" style="display: none;" role="dialog" aria-labelledby="titulo-modal-foto" aria-modal="true">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 id="titulo-modal-foto"><i class="fas fa-camera" aria-hidden="true"></i> Enviar Foto da Inundação</h3>
+                <button class="btn-fechar" type="button" onclick="fecharModalReportarFoto()" aria-label="Fechar modal">&times;</button>
+            </div>
+            <form id="form-reportar-foto" onsubmit="enviarRelatorioFoto(event)">
+                <label for="select-local">Local Afetado</label>
+                <select id="select-local" required aria-required="true">
+                    <option value="" disabled selected>Escolha o ponto de alagamento...</option>
+                    <option value="CRISTO">Rotatória do Cristo</option>
+                    <option value="SESC">SESC São Carlos</option>
+                </select>
+
+                <label for="input-foto">Selecione ou tire uma foto</label>
+                <div class="upload-area-box">
+                    <input type="file" id="input-foto" accept="image/*" capture="environment" required aria-required="true" onchange="previewFoto(event)">
+                </div>
+
+                <div id="box-preview-foto" style="display:none; text-align:center;">
+                    <img id="img-preview" src="" alt="Pré-visualização da foto selecionada">
+                </div>
+
+                <label for="input-descricao">Observação / Nível Aparente</label>
+                <input type="text" id="input-descricao" placeholder="Ex: Água subindo rapidamente perto do canteiro" required aria-required="true">
+
+                <button type="submit" class="btn-confirmar-envio" aria-label="Publicar foto no mapa">
+                    <i class="fas fa-paper-plane" aria-hidden="true"></i> Publicar Foto no Mapa
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <!-- MODAL DO RELATÓRIO DE ALAGAMENTOS -->
+    <div id="modal-relatorio" class="modal-overlay-relatorio" onclick="fecharModalRelatorioFora(event)" role="dialog" aria-labelledby="titulo-modal-relatorio" aria-modal="true">
+        <div class="modal-card-relatorio" onclick="event.stopPropagation()">
+            <div class="modal-header-relatorio">
+                <div class="header-title-wrap">
+                    <i class="fas fa-file-invoice" aria-hidden="true"></i>
+                    <h3 id="titulo-modal-relatorio">Relatório Geral de Alagamentos</h3>
+                </div>
+                <button class="btn-fechar-relatorio" onclick="fecharModalRelatorio()" aria-label="Fechar relatório">&times;</button>
+            </div>
+            
+            <div id="conteudo-relatorio-modal" class="modal-body-relatorio">
+                <!-- Conteúdo injetado via JS -->
+            </div>
+
+            <div class="modal-footer-relatorio">
+                <button type="button" class="btn-imprimir-relatorio" onclick="window.print()" aria-label="Baixar ou imprimir relatório em PDF">
+                    <i class="fas fa-print" aria-hidden="true"></i> Baixar / Imprimir PDF
+                </button>
+                <button type="button" class="btn-fechar-sec-relatorio" onclick="fecharModalRelatorio()">Fechar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL PARA VISUALIZAR A FOTO EM DETALHE -->
+    <div id="modal-visualizar-foto" class="modal-foto-overlay" onclick="fecharModalVisualizarFotoFora(event)" role="dialog" aria-label="Visualização em detalhe da foto" aria-modal="true">
+        <div class="modal-foto-card" onclick="event.stopPropagation()">
+            <div class="modal-foto-header">
+                <h4><i class="fas fa-camera" style="color: #8b5cf6;" aria-hidden="true"></i> Foto Reportada</h4>
+                <button type="button" class="btn-fechar-foto" onclick="fecharModalVisualizarFoto()" aria-label="Fechar foto">&times;</button>
+            </div>
+            <div class="modal-foto-body">
+                <img id="img-modal-view" src="" alt="Foto detalhada da inundação no local">
+            </div>
+            <div class="modal-foto-info">
+                <p id="desc-modal-view"></p>
+                <span id="hora-modal-view"></span>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL DE SUPORTE E ATENDIMENTO -->
+    <div id="modal-suporte" class="modal-suporte-overlay" onclick="fecharModalSuporteFora(event)" role="dialog" aria-labelledby="titulo-modal-suporte" aria-modal="true">
+        <div class="modal-suporte-card" onclick="event.stopPropagation()">
+            <div class="modal-suporte-header">
+                <div class="suporte-title-wrap">
+                    <i class="fas fa-headset" aria-hidden="true"></i>
+                    <h3 id="titulo-modal-suporte">Central de Suporte FloodPath</h3>
+                </div>
+                <button type="button" class="btn-fechar-suporte" onclick="fecharModalSuporte()" aria-label="Fechar modal de suporte">&times;</button>
+            </div>
+
+            <div class="modal-suporte-body">
+                <p class="suporte-subtitulo">Como podemos te ajudar hoje?</p>
+
+                <!-- OPÇÕES DE CONTATO RÁPIDO -->
+                <div class="suporte-opcoes-grid">
+                    <a href="mailto:suporte@floodpath.com?subject=Suporte%20FloodPath" class="card-opcao-suporte">
+                        <i class="fas fa-envelope" aria-hidden="true"></i>
+                        <div>
+                            <strong>E-mail de Suporte</strong>
+                            <span>suporte@floodpath.com</span>
+                        </div>
+                    </a>
+
+                    <a href="https://api.whatsapp.com/send?phone=5516999999999&text=Olá,%20preciso%20de%20suporte%20no%20FloodPath" target="_blank" class="card-opcao-suporte whatsapp">
+                        <i class="fab fa-whatsapp" aria-hidden="true"></i>
+                        <div>
+                            <strong>WhatsApp Técnico</strong>
+                            <span>Atendimento Rápido</span>
+                        </div>
+                    </a>
+                </div>
+
+                <!-- SEÇÃO DE DÚVIDAS FREQUENTES (FAQ) -->
+                <div class="faq-section">
+                    <h4><i class="fas fa-question-circle" aria-hidden="true"></i> Dúvidas Frequentes</h4>
+                    
+                    <details class="faq-item">
+                        <summary>Como funcionam os alertas em tempo real?</summary>
+                        <p>O FloodPath monitora continuamente os sensores nos pontos críticos (ex: Cristo e SESC). Quando o nível da água atinge os estados de ATENÇÃO ou CRÍTICO, as rotas que passam por esses locais são bloqueadas automaticamente para sua segurança.</p>
+                    </details>
+
+                    <details class="faq-item">
+                        <summary>Como posso reportar um alagamento?</summary>
+                        <p>Você pode utilizar o botão "Reportar Foto Inundação" no cabeçalho. Basta selecionar o local afetado, tirar ou carregar a foto e enviar. A foto ficará visível no mapa para outros usuários.</p>
+                    </details>
+
+                    <details class="faq-item">
+                        <summary>O que fazer se a minha rota estiver bloqueada?</summary>
+                        <p>Ao solicitar uma rota para uma área com risco de alagamento, nosso sistema tenta recalcular um caminho alternativo seguro por vias secas. Caso não haja caminho seguro, o sistema emitirá um alerta visual e sonoro.</p>
+                    </details>
+                </div>
+            </div>
+
+            <div class="modal-suporte-footer">
+                <button type="button" class="btn-fechar-secundario" onclick="fecharModalSuporte()">Fechar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ============================================================
+         WIDGET VLIBRAS - TRADUTOR EM LÍNGUA BRASILEIRA DE SINAIS
+         ============================================================ -->
+    <div vw class="enabled">
+        <div vw-access-button class="active"></div>
+        <div vw-plugin-wrapper>
+            <div class="vw-plugin-top-wrapper"></div>
+        </div>
+    </div>
+    <script src="https://vlibras.gov.br/app/vlibras-plugin.js"></script>
+    <script>
+        new window.VLibras.Widget('https://vlibras.gov.br/app');
+    </script>
+</body> 
+</html>
